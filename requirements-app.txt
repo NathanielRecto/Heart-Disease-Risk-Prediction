@@ -1,0 +1,12 @@
+# Runtime dependencies for the web app (used by the Dockerfile).
+# scikit-learn and xgboost are pinned to the versions that trained models/*.joblib:
+# pickled models only load reliably with the same versions. If you retrain with
+# different versions, update these pins to match.
+Flask==3.1.3
+pandas==2.3.3
+numpy==2.2.6
+scikit-learn==1.7.2
+xgboost==3.2.0
+joblib==1.6.0
+SQLAlchemy==2.0.54
+gunicorn==23.0.0; sys_platform != "win32"

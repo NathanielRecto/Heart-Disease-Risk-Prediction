@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    image: pulsecheck:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - heart-data:/data      # keeps prediction history across restarts
+    restart: unless-stopped
+
+volumes:
+  heart-data:

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}History{% endblock %}
+{% block content %}
+<section class="assess">
+  <h1>Prediction history</h1>
+  <p class="sub">Your 50 most recent assessments. Only you can see these: they are tied to a private cookie in this
+    browser, and are deleted automatically after {{ days }} days. Clearing your cookies or switching browser or
+    device starts a fresh, empty history.</p>
+
+  {% if rows %}
+  <div class="card">
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Time (UTC)</th><th>Model</th><th>Risk</th><th>Result</th><th>Age</th><th>Sex</th><th>Chest pain</th><th>BP</th><th>Chol</th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>{{ r['time (UTC)'] }}</td><td>{{ r['model'] }}</td><td><b>{{ r['risk'] }}</b></td>
+            <td><span class="badge {{ 'bad' if r['high risk?'] == 'Yes' else 'good' }}">{{ 'Elevated' if r['high risk?'] == 'Yes' else 'Lower' }}</span></td>
+            <td>{{ r['age']|int }}</td><td>{{ r['sex'] }}</td><td>{{ r['cp'] }}</td>
+            <td>{{ r['trestbps']|int if r['trestbps'] == r['trestbps'] and r['trestbps'] is not none else '-' }}</td>
+            <td>{{ r['chol']|int if r['chol'] == r['chol'] and r['chol'] is not none else '-' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <form method="post" action="{{ url_for('history_clear') }}" onsubmit="return confirm('Delete all saved predictions? This cannot be undone.');" class="right">
+      <button class="btn btn-soft" type="submit">{{ icons.icon('trash', 16) }} Clear history</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="card empty">
+    <p>No assessments yet.</p>
+    <a class="btn btn-primary" href="{{ url_for('assess') }}">Start an assessment</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

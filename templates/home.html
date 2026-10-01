@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <span class="pill">{{ icons.icon('shield', 16) }} Machine-learning heart risk screening</span>
+    <h1>Spot heart disease risk <span class="grad">early.</span></h1>
+    <p class="lead">Answer a few questions about your health and get an instant risk estimate from models
+      trained on {{ n_patients }} real patient records. Built to catch as many at-risk patients as possible,
+      so it errs on the side of a false alarm rather than a missed case.</p>
+    <div class="hero-cta">
+      <a class="btn btn-brand btn-lg" href="{{ url_for('assess') }}">{{ icons.icon('activity', 18) }} Start risk assessment</a>
+      <a class="btn btn-ghost btn-lg" href="{{ url_for('how_it_works') }}">{{ icons.icon('info', 18) }} How it works</a>
+    </div>
+  </div>
+
+  <div class="hero-visual">
+    <div class="hero-card">
+      <svg viewBox="0 0 320 300" class="hero-heart" role="img" aria-label="Stylised heart with an ECG line">
+        <defs>
+          <linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b3132a"/><stop offset="1" stop-color="#1e2f7a"/></linearGradient>
+          <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#b3132a" stop-opacity=".25"/><stop offset="1" stop-color="#b3132a" stop-opacity="0"/></radialGradient>
+        </defs>
+        <circle cx="160" cy="140" r="140" fill="url(#glow)"/>
+        <g class="beat"><path fill="url(#hg)" d="M160 252 L144 237 C84 183 44 147 44 102 C44 66 72 38 108 38 C128 38 148 47 160 62 C172 47 192 38 212 38 C248 38 276 66 276 102 C276 147 236 183 176 237 Z"/></g>
+        <polyline class="ecg" points="20 150 100 150 124 150 140 108 164 196 184 128 198 150 300 150" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="float-chip chip-top">
+      <span class="chip-icon green">{{ icons.icon('check', 20) }}</span>
+      <div><b>{{ (best_model.recall * 100)|round|int }}% recall</b><small>on held-out test patients</small></div>
+    </div>
+    <div class="float-chip chip-bottom">
+      <span class="chip-icon blue">{{ icons.icon('zap', 20) }}</span>
+      <div><b>Instant result</b><small>Real-time processing</small></div>
+    </div>
+  </div>
+</section>
+
+<section class="strip">
+  <div><b>{{ n_patients }}</b><span>patient records</span></div>
+  <div><b>4</b><span>hospitals in the data</span></div>
+  <div><b>3</b><span>models compared</span></div>
+  <div><b>{{ '%.2f'|format(best_model.auc) }}</b><span>best ROC-AUC</span></div>
+</section>
+{% endblock %}

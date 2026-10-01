@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}How it works{% endblock %}
+{% block content %}
+<section class="mission">
+  <h1>How PulseCheck works</h1>
+  <p>A small, transparent machine-learning project: what it is trained on, how well it performs,
+     and where it falls short.</p>
+</section>
+
+<div class="stack">
+  <section class="card">
+    <h2>{{ icons.icon('cpu', 22) }} From your answers to a risk estimate</h2>
+    <ol class="flow">
+      <li><b>1. Your answers</b><span>Age, sex, symptoms, blood pressure, cholesterol, blood sugar and heart-test results.</span></li>
+      <li><b>2. Cleaning</b><span>Blank fields are filled using typical values from the training data. Numbers are scaled and categories encoded the same way as in training.</span></li>
+      <li><b>3. The model</b><span>One of three models turns the answers into a probability between 0% and 100%.</span></li>
+      <li><b>4. The cutoff</b><span>If the probability is above the model's cutoff, the result is flagged as elevated. The cutoff is deliberately low, so a sick patient is less likely to be missed.</span></li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>{{ icons.icon('layers', 22) }} The three models</h2>
+    <p class="muted">Trained on {{ n_patients }} patient records from the UCI Heart Disease dataset (Cleveland,
+      Hungary, Switzerland, VA Long Beach). Numbers below are from 184 patients the models never saw during training.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Model</th><th>Recall</th><th>Precision</th><th>ROC-AUC</th><th>Cutoff</th></tr></thead>
+        <tbody>
+        {% for m in models %}
+          <tr><td><b>{{ m.name }}</b>{% if m.best %} <span class="tag">best CV score</span>{% endif %}</td>
+              <td>{{ '%.0f'|format(m.recall * 100) }}%</td><td>{{ '%.0f'|format(m.precision * 100) }}%</td>
+              <td>{{ '%.2f'|format(m.auc) }}</td><td>{{ '%.0f'|format(m.threshold * 100) }}%</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <ul class="bullets">
+      <li><b>Logistic Regression</b> is the baseline: a simple statistical model that weighs each answer.</li>
+      <li><b>Random Forest</b> averages hundreds of decision trees.</li>
+      <li><b>XGBoost</b> builds trees one after another, each correcting the last one's mistakes.</li>
+    </ul>
+    <p class="muted"><b>Recall</b> is the share of truly sick patients the model catches. <b>Precision</b> is the share of
+      flagged patients who really are sick. Missing a sick patient is worse than a false alarm, so recall comes first.
+      The three models score close together; with only 184 test patients the differences are within noise.</p>
+    <div class="img-row">
+      <figure><img src="{{ url_for('report_image', name='confusion_matrices.png') }}" alt="Confusion matrices for the three models"><figcaption>Confusion matrices on the test set</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="card" id="limits">
+    <h2>{{ icons.icon('alert', 22) }} Limitations</h2>
+    <ul class="bullets">
+      <li><b>Not a diagnosis.</b> The estimate cannot replace a doctor, an ECG or a stress test.</li>
+      <li><b>Small, old data.</b> {{ n_patients }} patients from four hospitals, mostly men. Results may not hold for you.</li>
+      <li><b>"No chest pain" raises the estimate.</b> In this dataset, patients without chest pain who were still examined had a high disease rate (about 79%), because they were referred for other reasons. The model learned that pattern, so it can look backwards for a healthy person.</li>
+      <li><b>Skipped fields are guessed.</b> Blank answers are replaced with typical values, which makes the estimate less reliable.</li>
+      <li><b>Hospital effects.</b> Some measurements were only recorded at some hospitals, so the hospital and the measurements are tangled together. The model never sees which hospital a patient came from, and the least reliable columns were left out.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>{{ icons.icon('shield', 22) }} Privacy</h2>
+    <div class="grid-3">
+      <div class="mini"><span class="num">1</span><b>Anonymous and private</b><p>There is no login. Your history is linked to a random ID in a cookie in your browser, so other visitors cannot see it. Nothing is sent to a third party.</p></div>
+      <div class="mini"><span class="num">2</span><b>Minimal data</b><p>Only the answers the model uses are saved. Height and weight are used to show your BMI and are never stored.</p></div>
+      <div class="mini"><span class="num">3</span><b>You stay in control</b><p>The History page can delete all your saved predictions at any time, and they are removed automatically after {{ history_days }} days.</p></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>{{ icons.icon('layers', 22) }} Technology stack</h2>
+    <div class="chips">
+      <span class="chip">Python / Flask</span><span class="chip">scikit-learn</span><span class="chip">XGBoost</span>
+      <span class="chip">Pandas</span><span class="chip">SQLite / SQLAlchemy</span>
+      <span class="chip">Jinja2 / vanilla JS</span><span class="chip">CSS3</span>
+    </div>
+  </section>
+
+  <div class="center"><a class="btn btn-brand btn-lg" href="{{ url_for('assess') }}">{{ icons.icon('activity', 18) }} Start risk assessment</a></div>
+</div>
+{% endblock %}

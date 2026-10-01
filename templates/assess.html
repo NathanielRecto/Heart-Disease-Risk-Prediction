@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block title %}Risk assessment{% endblock %}
+{% block content %}
+<section class="assess">
+  <h1>Heart Risk Assessment</h1>
+  <p class="sub">Complete this 4-step assessment to get a heart-disease risk estimate. Fields marked
+    <em>optional</em> can be skipped, but the estimate is less reliable the more you skip.</p>
+
+  <ol class="stepper" id="stepper">
+    <li class="step active"><span>1</span><em>Basics</em></li>
+    <li class="step"><span>2</span><em>Symptoms</em></li>
+    <li class="step"><span>3</span><em>Health</em></li>
+    <li class="step"><span>4</span><em>Heart tests</em></li>
+  </ol>
+
+  <div class="card wizard" id="wizardCard">
+    <form id="assessForm" novalidate>
+
+      <!-- Step 1 -->
+      <fieldset class="wizard-step active" data-step="0">
+        <h2>{{ icons.icon('user', 22) }} Personal basics</h2>
+        <div class="grid-2">
+          <div class="field">
+            <label for="age">How old are you?</label>
+            <input id="age" name="age" type="number" inputmode="numeric" min="18" max="100" placeholder="e.g. 45">
+            <p class="hint">Age is one of the strongest risk factors.</p>
+            <p class="error" data-for="age"></p>
+          </div>
+          <div class="field">
+            <label for="sex">Biological sex</label>
+            <select id="sex" name="sex">
+              <option value="">Select</option><option>Male</option><option>Female</option>
+            </select>
+            <p class="hint">Heart-disease patterns differ by sex.</p>
+            <p class="error" data-for="sex"></p>
+          </div>
+          <div class="field">
+            <label for="height_cm">Height (cm) <span class="opt">optional</span></label>
+            <input id="height_cm" name="height_cm" type="number" inputmode="decimal" placeholder="e.g. 175">
+            <p class="error" data-for="height_cm"></p>
+          </div>
+          <div class="field">
+            <label for="weight_kg">Weight (kg) <span class="opt">optional</span></label>
+            <input id="weight_kg" name="weight_kg" type="number" inputmode="decimal" placeholder="e.g. 75">
+            <p class="error" data-for="weight_kg"></p>
+          </div>
+          <div class="field">
+            <label>Calculated BMI</label>
+            <div class="readout" id="bmiReadout">--</div>
+            <p class="hint">Shown for information only. This model does not use BMI, because the training data has no height or weight.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Step 2 -->
+      <fieldset class="wizard-step" data-step="1">
+        <h2>{{ icons.icon('activity', 22) }} Symptoms</h2>
+        <div class="field">
+          <label>What best describes any chest pain you have had?</label>
+          <div class="choice-grid">
+            <label class="choice"><input type="radio" name="cp" value="typical angina">
+              <span><b>Typical angina</b><small>Pressure or tightness brought on by effort or stress and eased by rest</small></span></label>
+            <label class="choice"><input type="radio" name="cp" value="atypical angina">
+              <span><b>Atypical angina</b><small>Chest pain with only some of those features</small></span></label>
+            <label class="choice"><input type="radio" name="cp" value="non-anginal">
+              <span><b>Non-anginal pain</b><small>Chest pain unlikely to come from the heart</small></span></label>
+            <label class="choice"><input type="radio" name="cp" value="asymptomatic">
+              <span><b>No chest pain</b><small>I have not had chest pain</small></span></label>
+          </div>
+          <p class="hint">Heads-up: in this dataset, people with <em>no</em> chest pain who were still examined
+            had a high disease rate, so choosing "No chest pain" can raise the estimate. See
+            <a href="{{ url_for('how_it_works') }}#limits">limitations</a>.</p>
+          <p class="error" data-for="cp"></p>
+        </div>
+        <div class="field">
+          <label>Do you get chest pain during exercise?</label>
+          <div class="seg" data-name="exang">
+            <label><input type="radio" name="exang" value="False"><span>No</span></label>
+            <label><input type="radio" name="exang" value="True"><span>Yes</span></label>
+          </div>
+          <p class="error" data-for="exang"></p>
+        </div>
+      </fieldset>
+
+      <!-- Step 3 -->
+      <fieldset class="wizard-step" data-step="2">
+        <h2>{{ icons.icon('file', 22) }} Health profile</h2>
+        <div class="grid-2">
+          <div class="field">
+            <label for="trestbps">Resting blood pressure, top number <span class="opt">optional</span></label>
+            <input id="trestbps" name="trestbps" type="number" inputmode="numeric" placeholder="mm Hg, e.g. 120">
+            <p class="error" data-for="trestbps"></p>
+          </div>
+          <div class="field">
+            <label for="chol">Total cholesterol <span class="opt">optional</span></label>
+            <input id="chol" name="chol" type="number" inputmode="numeric" placeholder="mg/dL, e.g. 200">
+            <p class="error" data-for="chol"></p>
+          </div>
+          <div class="field">
+            <label>Fasting blood sugar above 120 mg/dL? <span class="opt">optional</span></label>
+            <div class="seg" data-name="fbs">
+              <label><input type="radio" name="fbs" value="" checked><span>Not sure</span></label>
+              <label><input type="radio" name="fbs" value="False"><span>No</span></label>
+              <label><input type="radio" name="fbs" value="True"><span>Yes</span></label>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Step 4 -->
+      <fieldset class="wizard-step" data-step="3">
+        <h2>{{ icons.icon('heart', 22) }} Heart tests</h2>
+        <p class="hint block">These come from an ECG or an exercise stress test. Skip anything you do not have.</p>
+        <div class="grid-2">
+          <div class="field">
+            <label for="thalch">Highest heart rate reached in a stress test <span class="opt">optional</span></label>
+            <input id="thalch" name="thalch" type="number" inputmode="numeric" placeholder="bpm, e.g. 150">
+            <p class="error" data-for="thalch"></p>
+          </div>
+          <div class="field">
+            <label for="oldpeak">ST depression after exercise <span class="opt">optional</span></label>
+            <input id="oldpeak" name="oldpeak" type="number" inputmode="decimal" step="0.1" placeholder="e.g. 1.0">
+            <p class="error" data-for="oldpeak"></p>
+          </div>
+          <div class="field">
+            <label for="restecg">Resting ECG result <span class="opt">optional</span></label>
+            <select id="restecg" name="restecg">
+              <option value="">I don't know</option>
+              <option value="normal">Normal</option>
+              <option value="st-t abnormality">ST-T wave abnormality</option>
+              <option value="lv hypertrophy">Left ventricular hypertrophy</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="model">Prediction model</label>
+            <select id="model" name="model">
+              {% for m in models %}<option value="{{ m.name }}">{{ m.name }}{{ ' (best)' if m.best }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <p class="error form-error" id="formError" role="alert"></p>
+
+      <div class="wizard-nav">
+        <button type="button" class="btn btn-soft" id="prevBtn" hidden>{{ icons.icon('arrow-left', 16) }} Previous</button>
+        <button type="button" class="btn btn-primary" id="nextBtn">Next step {{ icons.icon('arrow-right', 16) }}</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading screen -->
+  <div class="card loader" id="loader" hidden aria-live="polite">
+    <h2>Analysing your answers</h2>
+    <div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p id="loaderMsg">Preparing your data...</p>
+  </div>
+
+  <!-- Result -->
+  <div class="card result" id="result" hidden aria-live="polite"></div>
+
+  <p class="privacy">{{ icons.icon('shield', 14) }} Your answers are saved on the server, linked only to an anonymous cookie in your browser, so only you can see them. You can delete them any time on the History page, and they are removed automatically after {{ history_days }} days. Height and weight are never saved.</p>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/assess.js') }}"></script>{% endblock %}

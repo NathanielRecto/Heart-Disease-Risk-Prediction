@@ -1,0 +1,22 @@
+# Keep the image small and free of local files
+.venv
+.venv-*
+**/__pycache__
+*.pyc
+.git
+.gitignore
+.idea
+.vscode
+
+# Local database: the container gets its own on the /data volume
+heart.db
+
+# Not needed to run the app
+notebooks
+tests
+docs
+Dockerfile
+docker-compose.yml
+.dockerignore
+requirements.txt
+README.md
