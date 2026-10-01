@@ -15,8 +15,10 @@ import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.inspection import permutation_importance
-from sklearn.metrics import fbeta_score, precision_score, recall_score, roc_auc_score, roc_curve
-from sklearn.model_selection import StratifiedKFold, cross_val_predict, train_test_split
+from sklearn.metrics import (fbeta_score, make_scorer, precision_score, recall_score, roc_auc_score,
+                             roc_curve)
+from sklearn.model_selection import (StratifiedKFold, cross_val_predict, cross_validate,
+                                     train_test_split)
 
 from src.predict import LABELS
 from src.preprocess import ROOT, get_xy, load_data
@@ -83,21 +85,33 @@ def threshold_figure(arts, X_train, y_train):
     fig.tight_layout(); fig.savefig(REPORTS / "threshold_tradeoff.png", dpi=130); plt.close(fig)
 
 
-def cv_figure():
-    cv = pd.read_csv(REPORTS / "cv_comparison.csv")
-    cv = cv[cv["sparse_cols"] == "drop"].set_index("model")
+def cv_figure(arts, X_train, y_train):
+    """Default settings (from train.py's cv_comparison.csv) next to the tuned models, same 5 folds.
+    Tuned scores are slightly optimistic: the settings were picked on these same folds."""
+    default = pd.read_csv(REPORTS / "cv_comparison.csv")
+    default = default[default["sparse_cols"] == "drop"].set_index("model")
     metrics = ["recall", "precision", "f1", "roc_auc"]
     names = {"recall": "Recall", "precision": "Precision", "f1": "F1", "roc_auc": "ROC-AUC"}
+    scoring = {"recall": "recall", "precision": "precision", "f1": "f1", "roc_auc": "roc_auc",
+               "f2": make_scorer(fbeta_score, beta=2)}
+    cv = StratifiedKFold(5, shuffle=True, random_state=SEED)
+    tuned = {}
+    for name, a in arts.items():
+        s = cross_validate(clone(a["model"]), X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+        tuned[name] = {m: s[f"test_{m}"].mean() for m in scoring}
+    tuned = pd.DataFrame(tuned).T
+    tuned.round(4).to_csv(REPORTS / "cv_tuned.csv", index_label="model")
+
     x = np.arange(len(metrics)); w = 0.26
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    for i, (model, row) in enumerate(cv.iterrows()):
-        vals = [row[m] for m in metrics]
-        bars = ax.bar(x + (i - 1) * w, vals, w, label=model, color=COLORS[model])
-        ax.bar_label(bars, fmt="%.2f", fontsize=8, padding=2)
-    ax.set_xticks(x, [names[m] for m in metrics]); ax.set_ylim(0.6, 1.0)
-    ax.set(title="5-fold cross-validation on the training set (default settings)",
-           ylabel="Mean score (axis starts at 0.6)")
-    ax.legend(loc="lower right")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4.6), sharey=True)
+    for ax, table, title in [(axes[0], default, "Default settings"), (axes[1], tuned, "After tuning")]:
+        for i, model in enumerate(["Logistic Regression", "Random Forest", "XGBoost"]):
+            bars = ax.bar(x + (i - 1) * w, [table.loc[model, m] for m in metrics], w, label=model, color=COLORS[model])
+            ax.bar_label(bars, fmt="%.2f", fontsize=8, padding=2)
+        ax.set_xticks(x, [names[m] for m in metrics]); ax.set_ylim(0.6, 1.0)
+        ax.set_title(f"{title}: 5-fold CV on the training set")
+    axes[0].set_ylabel("Mean score (axis starts at 0.6)")
+    axes[1].legend(loc="upper center", ncol=3, frameon=False, fontsize=9)
     fig.tight_layout(); fig.savefig(REPORTS / "cv_comparison.png", dpi=130); plt.close(fig)
 
 
@@ -120,6 +134,6 @@ if __name__ == "__main__":
     check_reproduction(arts, X_test, y_test)
     roc_figure(arts, X_test, y_test)
     threshold_figure(arts, X_train, y_train)
-    cv_figure()
+    cv_figure(arts, X_train, y_train)
     importance_figure(arts, X_test, y_test)
     print("Wrote roc_curves.png, threshold_tradeoff.png, cv_comparison.png, feature_importance.png to reports/")

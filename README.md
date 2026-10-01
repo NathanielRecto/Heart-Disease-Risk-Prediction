@@ -134,6 +134,12 @@ Tuned settings: Logistic Regression `C=0.01` (strong regularisation); Random For
 - **Random Forest** had the highest test recall (98%, only 2 missed). But it did not have the best cross-validated
   score, and choosing it *because* of its test result would be selecting on the test set. It is also a 3.6 MB file.
 
+**Why it looks last in the default-settings chart.** That chart is *before* tuning. XGBoost has the most settings and
+its defaults overfit a small dataset, so it starts last and gains the most from tuning (see the right-hand panel
+of the [cross-validation chart](#cross-validation-comparison)). It was chosen on the tuned scores, specifically
+because it catches the most sick patients (tuned CV recall 0.885 vs 0.862 and 0.848). It is *not* the best on
+ROC-AUC or precision, so it is "best at the metric we set", not "best at everything".
+
 **The honest summary:** on 920 patients the three models are very hard to tell apart. A difference of one patient
 moves test recall by about one point, and the default-setting CV scores put Logistic Regression ahead on ROC-AUC.
 XGBoost was chosen by a pre-set rule, not because it clearly beats the others.
@@ -146,10 +152,19 @@ recreated test split reproduces the stored metrics exactly.
 
 ### Cross-validation comparison
 
-<p align="center"><img src="reports/cv_comparison.png" alt="Cross-validation comparison of the three models" width="640"></p>
+<p align="center"><img src="reports/cv_comparison.png" alt="Cross-validation comparison of the three models, before and after tuning" width="900"></p>
 
-With default settings the models are close: Random Forest has the best CV recall (0.85), Logistic Regression the best
-precision and ROC-AUC. Note the axis starts at 0.6, which makes small gaps look bigger than they are.
+Left: every model with its default settings. Right: the same models after tuning, scored on the same 5 folds
+(`reports/cv_tuned.csv`). Both axes start at 0.6, which makes small gaps look bigger than they are.
+
+- **With defaults, XGBoost is the weakest of the three** (ROC-AUC 0.84 vs 0.88 for Logistic Regression). Its default
+  settings overfit a dataset of only 736 training rows.
+- **After tuning, XGBoost has the best recall (0.885) and F2/F1**, a middle precision (0.80), and a ROC-AUC (0.868)
+  that is essentially tied with the others (0.876 and 0.871). It gained the most from tuning: F2 +0.034, against
+  +0.011 for Logistic Regression and +0.013 for Random Forest.
+- **Caution:** because XGBoost gained the most from tuning, it is also the most exposed to optimistic bias. Its
+  settings were the best of 15 random tries scored on these same folds, and there is no nested cross-validation to
+  correct for that, so its tuned score is probably a little flattering. The held-out test set is the cleaner check.
 
 **Dropping the sparse columns.** `ca` is ~99% missing at three of the four hospitals, `thal` and `slope` are also
 heavily missing, and missingness depends on the hospital. Mean CV scores with and without them:
