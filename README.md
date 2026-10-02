@@ -98,8 +98,11 @@ flowchart TD
    and blood pressure of 0 are impossible, so they are treated as missing. The hospital and the id are never features.
 3. **Preprocessing.** Numeric columns: median imputation + standard scaling. Categorical: most-frequent imputation +
    one-hot encoding. **Missingness is deliberately not a feature** (no "was missing" flags), because in this data it
-   gives away the hospital; see [Review fixes](#review-fixes). Everything sits inside a scikit-learn `Pipeline`, so
-   it is fit on training data only and the app applies identical preprocessing.
+   gives away the hospital: all 123 Swiss patients lack cholesterol and 93% of them are sick, so patients with missing
+   cholesterol have an 81% disease rate versus 48% otherwise. A model allowed to see missingness would learn "blank
+   means sick", and skipping an optional field in the app would raise the risk. A test checks that leaving any field
+   blank gives exactly the same result as typing in the typical value. Everything sits inside a scikit-learn
+   `Pipeline`, so it is fit on training data only and the app applies identical preprocessing.
 4. **Model comparison.** Logistic Regression (baseline), Random Forest, XGBoost, each scored with stratified 5-fold
    cross-validation on the 734 training patients, with and without the mostly-missing columns `ca`, `thal`, `slope`.
 5. **Tuning.** `RandomizedSearchCV` (up to 15 settings per model) scored on **F2**, which weights recall four times
@@ -230,8 +233,7 @@ So the gain is real but modest: XGBoost gives up one sick patient to avoid 38 of
 
 Permutation importance on the test set: how much ROC-AUC drops when one answer is shuffled. Chest pain type matters
 most by a wide margin, then exercise-induced angina, ST depression, sex and cholesterol. Fasting blood sugar and
-resting ECG add essentially nothing. Fasting blood sugar ranked 6th before the missing-value fix, most likely
-because "blood sugar missing" was a stand-in for the Swiss and VA hospitals. Treat this as indicative: with 184 test
+resting ECG add essentially nothing. Treat this as indicative: with 184 test
 patients it is noisy, correlated features share credit, and chest pain's weight partly reflects the dataset's
 selection effect (see Caveats).
 
@@ -246,27 +248,6 @@ selection effect (see Caveats).
 
 Recall holds across hospitals, but precision is lowest where disease is rarest (Hungary), as expected from a low
 cutoff. Each subset is small. Raw tables: `reports/*.csv`.
-
-## Review fixes
-
-A code and methodology review of the first version found two problems, both fixed and covered by tests:
-
-1. **Missing values leaked the hospital.** The first version added "was this value missing?" as a feature. In this
-   dataset missingness depends on the hospital: all 123 Swiss patients lack cholesterol and 93% of them are sick, so
-   patients with missing cholesterol had an 81% disease rate versus 48% otherwise. The model learned "blank means
-   sick", and in the app, skipping all optional fields raised Logistic Regression's estimate for a typical patient from
-   36% to 64% and flipped XGBoost from "lower" to "elevated". Now blanks are filled with typical values and carry no
-   signal: a test checks that leaving any field blank gives *exactly* the same result as typing in the typical value.
-2. **The percentages were not probabilities.** XGBoost's raw outputs only ranged from 0.23 to 0.80, and patients it
-   scored around 30% were actually sick 8% of the time. All models are now calibrated (see above).
-
-Smaller fixes: two duplicate patients removed, malformed API requests now return 400 instead of crashing, request size
-is capped, `requirements.txt` is pinned so the saved models keep loading, and database start-up tolerates several
-server workers starting at once.
-
-The first version reported 96% recall, 74% precision and 0.92 ROC-AUC. The new numbers are 99%, 70% and 0.90. They are
-not directly comparable (removing the duplicates changes the split), but a slightly lower ROC-AUC is the expected cost
-of no longer letting the model read the hospital from missing values.
 
 ## Caveats, stated plainly
 
@@ -302,7 +283,7 @@ The trained models are included in `models/`, so the app runs right away. To rep
 python -m src.train               # compare, tune, calibrate 3 models; writes models/ and reports/
 python -m src.report              # extra figures from the saved models (no retraining)
 python -m src.load_db             # optional: load the cleaned dataset into SQLite
-python tests/smoke_test_app.py    # tests pages, models, validation, the missing-value fix and privacy
+python tests/smoke_test_app.py    # tests pages, models, input validation, missing-value handling and privacy
 ```
 
 `notebooks/01_eda.ipynb` contains the exploratory analysis.
