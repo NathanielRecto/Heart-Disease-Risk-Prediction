@@ -12,8 +12,8 @@
     <h2>{{ icons.icon('cpu', 22) }} From your answers to a risk estimate</h2>
     <ol class="flow">
       <li><b>1. Your answers</b><span>Age, sex, symptoms, blood pressure, cholesterol, blood sugar and heart-test results.</span></li>
-      <li><b>2. Cleaning</b><span>Blank fields are filled using typical values from the training data. Numbers are scaled and categories encoded the same way as in training.</span></li>
-      <li><b>3. The model</b><span>One of three models turns the answers into a probability between 0% and 100%.</span></li>
+      <li><b>2. Cleaning</b><span>Blank fields are filled with typical values from the training patients (for example the median cholesterol). Numbers are scaled and categories encoded the same way as in training.</span></li>
+      <li><b>3. The model</b><span>One of three models scores the answers, and the score is calibrated so that "30%" means roughly 30 in 100 similar patients in the data had heart disease.</span></li>
       <li><b>4. The cutoff</b><span>If the probability is above the model's cutoff, the result is flagged as elevated. The cutoff is deliberately low, so a sick patient is less likely to be missed.</span></li>
     </ol>
   </section>
@@ -51,10 +51,10 @@
     <h2>{{ icons.icon('alert', 22) }} Limitations</h2>
     <ul class="bullets">
       <li><b>Not a diagnosis.</b> The estimate cannot replace a doctor, an ECG or a stress test.</li>
-      <li><b>Small, old data.</b> {{ n_patients }} patients from four hospitals, mostly men. Results may not hold for you.</li>
+      <li><b>Small, old data.</b> {{ n_patients }} patients from four hospitals, mostly men, all referred for heart tests. Results may not hold for you.</li>
       <li><b>"No chest pain" raises the estimate.</b> In this dataset, patients without chest pain who were still examined had a high disease rate (about 79%), because they were referred for other reasons. The model learned that pattern, so it can look backwards for a healthy person.</li>
-      <li><b>Skipped fields are guessed.</b> Blank answers are replaced with typical values, which makes the estimate less reliable.</li>
-      <li><b>Hospital effects.</b> Some measurements were only recorded at some hospitals, so the hospital and the measurements are tangled together. The model never sees which hospital a patient came from, and the least reliable columns were left out.</li>
+      <li><b>Skipped fields are guessed.</b> Blank answers are replaced with the typical value of the training patients, who were all being examined for heart disease. A blank therefore counts as "average for those patients", which makes the estimate less reliable.</li>
+      <li><b>Hospital effects.</b> Some measurements were only recorded at some hospitals (Switzerland recorded no cholesterol, and 93% of its patients were sick), so whether a value is missing gives away the hospital. The model never sees the hospital, the least reliable columns were left out, and a blank field is never used as a signal on its own.</li>
     </ul>
   </section>
 

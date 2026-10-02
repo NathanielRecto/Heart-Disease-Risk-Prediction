@@ -6,8 +6,9 @@ Flow
  1. Stratified 80/20 train/test split. The test set is not touched until the end.
  2. 5-fold CV on the training set, for each model x {drop, keep} sparse columns.
  3. Pick the sparse-column strategy, then tune each model (scored by F2).
- 4. Choose each model's decision threshold on out-of-fold training predictions.
- 5. Evaluate once on the test set, plot, and save the best model.
+ 4. Calibrate each model (Platt scaling) and choose its decision threshold,
+    both on out-of-fold training predictions.
+ 5. Evaluate once on the test set, plot, and save all three models.
 """
 import json
 
@@ -15,12 +16,13 @@ import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import fbeta_score, make_scorer
+from sklearn.metrics import fbeta_score, make_scorer, precision_score, recall_score
 from sklearn.model_selection import (
     RandomizedSearchCV, StratifiedKFold, cross_val_predict, cross_validate, train_test_split)
 from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 
+from src.calibration import calibrate, fit_calibrator
 from src.evaluate import best_threshold, metrics_at, plot_confusions, plot_pr_curves
 from src.preprocess import ROOT, build_preprocessor, feature_columns, get_xy, load_data
 
@@ -97,12 +99,16 @@ def main():
         search.fit(X_train, y_train)
         model = search.best_estimator_
 
-        oof = cross_val_predict(search.best_estimator_, X_train, y_train, cv=cv,
-                                method="predict_proba", n_jobs=-1)[:, 1]
-        thr = best_threshold(y_train, oof)
-        proba = model.predict_proba(X_test)[:, 1]
+        # Out-of-fold scores: each training patient scored by a model that never saw them.
+        # They are used to fit the calibration and to choose the threshold, so the test
+        # set plays no part in either.
+        raw_oof = cross_val_predict(search.best_estimator_, X_train, y_train, cv=cv,
+                                    method="predict_proba", n_jobs=-1)[:, 1]
+        calibrator = fit_calibrator(raw_oof, y_train)
+        thr = best_threshold(y_train, calibrate(calibrator, raw_oof))
+        proba = calibrate(calibrator, model.predict_proba(X_test)[:, 1])
         results[name] = (proba, thr)
-        fitted[name] = (model, thr, search.best_score_, search.best_params_)
+        fitted[name] = (model, thr, search.best_score_, search.best_params_, calibrator)
 
         for label, t in [("threshold 0.50", 0.5), ("tuned threshold", thr)]:
             table.append({"model": name, "setting": label, "cv_f2": search.best_score_,
@@ -119,14 +125,17 @@ def main():
 
     # Per-hospital view of the best model's test predictions (diagnostic only)
     best_name = max(fitted, key=lambda n: fitted[n][2])
-    model, thr, cv_f2, params = fitted[best_name]
+    model, thr, cv_f2, params, _ = fitted[best_name]
     proba, _ = results[best_name]
     per_site = []
     for site, g in test.assign(p=proba).groupby("dataset"):
-        m = metrics_at(g["target"], g["p"].values, thr) if g["target"].nunique() > 1 else None
+        pred = (g["p"] >= thr).astype(int)
         per_site.append({"hospital": site, "n": len(g), "disease_rate": g["target"].mean(),
-                         "recall": m["recall"] if m else None,
-                         "precision": m["precision"] if m else None})
+                         # recall needs sick patients, precision needs flagged ones; a hospital
+                         # where everyone is sick (Switzerland) still has a valid recall
+                         "recall": recall_score(g["target"], pred) if g["target"].sum() else None,
+                         "precision": precision_score(g["target"], pred) if pred.sum() else None,
+                         "false_alarms": int(((pred == 1) & (g["target"] == 0)).sum())})
     per_site = pd.DataFrame(per_site)
     per_site.to_csv(REPORTS_DIR / "per_hospital.csv", index=False)
     print(f"\n== {best_name} by hospital (test set) ==\n{per_site.round(3).to_string(index=False)}")
@@ -135,12 +144,13 @@ def main():
     # Every model is saved (with its own threshold and test metrics) so the
     # app can offer a dropdown; `is_best` marks the default selection.
     num, cat = feature_columns(sparse)
-    for name, (m, t, m_cv_f2, _) in fitted.items():
+    for name, (m, t, m_cv_f2, _, cal) in fitted.items():
         tuned = metrics[(metrics.model == name) & (metrics.setting == "tuned threshold")].iloc[0]
-        joblib.dump({"model": m, "threshold": t, "sparse": sparse, "numeric": num,
+        joblib.dump({"model": m, "calibrator": cal, "threshold": t, "sparse": sparse, "numeric": num,
                      "categorical": cat, "model_name": name, "is_best": name == best_name,
                      "cv_f2": m_cv_f2, "test_recall": tuned["recall"],
-                     "test_precision": tuned["precision"], "test_roc_auc": tuned["roc_auc"]},
+                     "test_precision": tuned["precision"], "test_roc_auc": tuned["roc_auc"],
+                     "test_brier": tuned["brier"]},
                     MODELS_DIR / f"{name.lower().replace(' ', '_')}.joblib")
     summary = metrics[(metrics.model == best_name) & (metrics.setting == "tuned threshold")]
     (REPORTS_DIR / "summary.json").write_text(json.dumps({

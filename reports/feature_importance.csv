@@ -1,11 +1,11 @@
 feature,importance,std
-Chest pain type,0.0993,0.0235
-ST depression,0.0321,0.0099
-Exercise-induced angina,0.0248,0.0095
-Cholesterol,0.015,0.0063
-Sex,0.0134,0.0056
-Fasting blood sugar,0.0089,0.0041
-Max heart rate,0.0052,0.007
-Resting blood pressure,0.0008,0.0029
-Age,-0.0,0.0066
-Resting ECG,-0.0014,0.0022
+Chest pain type,0.0889,0.0176
+Exercise-induced angina,0.0315,0.0112
+ST depression,0.023,0.0077
+Sex,0.0196,0.0087
+Cholesterol,0.0113,0.0057
+Max heart rate,0.0065,0.0064
+Age,0.0044,0.0059
+Resting blood pressure,0.0036,0.0025
+Fasting blood sugar,0.0005,0.0007
+Resting ECG,0.0,0.0019

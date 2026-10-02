@@ -1,7 +1,7 @@
 {
   "best_model": "XGBoost",
   "sparse_columns": "drop",
-  "threshold": 0.3999999999999999,
+  "threshold": 0.18,
   "best_params": {
     "clf__subsample": 0.7,
     "clf__n_estimators": 100,
@@ -10,17 +10,18 @@
     "clf__colsample_bytree": 0.7
   },
   "test": {
-    "cv_f2": 0.8648,
-    "threshold": 0.4,
-    "accuracy": 0.7935,
-    "recall": 0.9608,
-    "precision": 0.7424,
-    "f1": 0.8376,
-    "f2": 0.9074,
-    "roc_auc": 0.9171,
-    "TN": 48.0,
-    "FP": 34.0,
-    "FN": 4.0,
-    "TP": 98.0
+    "cv_f2": 0.8523,
+    "threshold": 0.18,
+    "accuracy": 0.7554,
+    "recall": 0.9902,
+    "precision": 0.6966,
+    "f1": 0.8178,
+    "f2": 0.9132,
+    "roc_auc": 0.9011,
+    "brier": 0.1254,
+    "TN": 38.0,
+    "FP": 44.0,
+    "FN": 1.0,
+    "TP": 101.0
   }
 }

@@ -5,6 +5,7 @@ Recreates the exact same train/test split as train.py (same seed), then draws:
   threshold_tradeoff.png  recall / precision / F2 vs threshold (out-of-fold, training data)
   cv_comparison.png       5-fold CV scores of the three models (default settings)
   feature_importance.png  permutation importance of the final model on the test set
+  calibration.png         predicted vs actual disease rate, before and after calibration
 and checks that the recreated test metrics match the ones stored with each model."""
 import joblib
 import matplotlib
@@ -14,18 +15,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
+from sklearn.calibration import calibration_curve
 from sklearn.inspection import permutation_importance
-from sklearn.metrics import (fbeta_score, make_scorer, precision_score, recall_score, roc_auc_score,
-                             roc_curve)
+from sklearn.metrics import (brier_score_loss, fbeta_score, make_scorer, precision_score, recall_score,
+                             roc_auc_score, roc_curve)
 from sklearn.model_selection import (StratifiedKFold, cross_val_predict, cross_validate,
                                      train_test_split)
 
+from src.calibration import calibrate, risk
+from src.evaluate import MODEL_COLORS
 from src.predict import LABELS
 from src.preprocess import ROOT, get_xy, load_data
 from src.train import SEED
 
 REPORTS = ROOT / "reports"
-COLORS = {"Logistic Regression": "#2563eb", "Random Forest": "#059669", "XGBoost": "#8a0f1d"}
+COLORS = MODEL_COLORS
 plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False, "axes.grid": True,
                      "grid.alpha": .25, "font.size": 10})
 
@@ -43,7 +47,7 @@ def load_everything():
 def check_reproduction(arts, X_test, y_test):
     """The recreated split must give the metrics that were stored at training time."""
     for name, a in arts.items():
-        pred = (a["model"].predict_proba(X_test)[:, 1] >= a["threshold"]).astype(int)
+        pred = (risk(a, X_test) >= a["threshold"]).astype(int)
         assert abs(recall_score(y_test, pred) - a["test_recall"]) < 1e-9, f"{name}: split differs from training"
         assert abs(precision_score(y_test, pred) - a["test_precision"]) < 1e-9, f"{name}: split differs from training"
     print("OK: recreated test metrics match the stored ones for all models")
@@ -52,7 +56,7 @@ def check_reproduction(arts, X_test, y_test):
 def roc_figure(arts, X_test, y_test):
     fig, ax = plt.subplots(figsize=(6, 5.2))
     for name, a in arts.items():
-        p = a["model"].predict_proba(X_test)[:, 1]
+        p = risk(a, X_test)
         fpr, tpr, _ = roc_curve(y_test, p)
         ax.plot(fpr, tpr, color=COLORS[name], lw=2, label=f"{name} (AUC {roc_auc_score(y_test, p):.2f})")
         pred = (p >= a["threshold"]).astype(int)
@@ -70,8 +74,9 @@ def threshold_figure(arts, X_train, y_train):
     grid = np.linspace(0.05, 0.95, 91)
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), sharey=True)
     for ax, (name, a) in zip(axes, arts.items()):
-        oof = cross_val_predict(clone(a["model"]), X_train, y_train, cv=cv, method="predict_proba", n_jobs=-1)[:, 1]
-        rec = [recall_score(y_train, oof >= t) for t in grid]
+        raw = cross_val_predict(clone(a["model"]), X_train, y_train, cv=cv, method="predict_proba", n_jobs=-1)[:, 1]
+        oof = calibrate(a["calibrator"], raw)  # same calibrated scale the threshold was chosen on
+        rec =[recall_score(y_train, oof >= t) for t in grid]
         pre = [precision_score(y_train, oof >= t, zero_division=0) for t in grid]
         f2 = [fbeta_score(y_train, oof >= t, beta=2) for t in grid]
         ax.plot(grid, rec, label="Recall", color="#dc2626", lw=2)
@@ -115,7 +120,26 @@ def cv_figure(arts, X_train, y_train):
     fig.tight_layout(); fig.savefig(REPORTS / "cv_comparison.png", dpi=130); plt.close(fig)
 
 
+def calibration_figure(arts, X_test, y_test):
+    """Reliability diagram on the test set: does "40%" mean 40 in 100 patients are sick?"""
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.6), sharey=True)
+    for ax, (name, a) in zip(axes, arts.items()):
+        raw = a["model"].predict_proba(X_test)[:, 1]
+        cal = risk(a, X_test)
+        for p, label, style in [(raw, "Before calibration", dict(color="#9ca3af", ls="--", marker="s")),
+                                (cal, "After calibration", dict(color=COLORS[name], marker="o"))]:
+            frac, mean_pred = calibration_curve(y_test, p, n_bins=5, strategy="quantile")
+            ax.plot(mean_pred, frac, lw=2, label=f"{label} (Brier {brier_score_loss(y_test, p):.3f})", **style)
+        ax.plot([0, 1], [0, 1], "k:", lw=1, label="Perfect calibration")
+        ax.set(xlim=(0, 1), ylim=(0, 1), title=name, xlabel="Predicted probability (test patients, 5 equal-size bins)")
+        ax.legend(loc="upper left", fontsize=8)
+    axes[0].set_ylabel("Actual share with heart disease")
+    fig.tight_layout(); fig.savefig(REPORTS / "calibration.png", dpi=130); plt.close(fig)
+
+
 def importance_figure(arts, X_test, y_test):
+    # Permutation importance uses the raw pipeline: calibration is monotonic, so it
+    # does not change ROC-AUC and would not change these numbers.
     name = next(n for n, a in arts.items() if a["is_best"])
     r = permutation_importance(arts[name]["model"], X_test, y_test, scoring="roc_auc", n_repeats=30, random_state=SEED)
     out = pd.DataFrame({"feature": [LABELS[c] for c in X_test.columns], "importance": r.importances_mean,
@@ -135,5 +159,7 @@ if __name__ == "__main__":
     roc_figure(arts, X_test, y_test)
     threshold_figure(arts, X_train, y_train)
     cv_figure(arts, X_train, y_train)
+    calibration_figure(arts, X_test, y_test)
     importance_figure(arts, X_test, y_test)
-    print("Wrote roc_curves.png, threshold_tradeoff.png, cv_comparison.png, feature_importance.png to reports/")
+    print("Wrote roc_curves.png, threshold_tradeoff.png, cv_comparison.png, calibration.png, "
+          "feature_importance.png to reports/")

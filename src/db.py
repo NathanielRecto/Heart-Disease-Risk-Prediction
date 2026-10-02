@@ -13,11 +13,13 @@ To use PostgreSQL later, set DATABASE_URL, e.g.
 """
 import json
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 from sqlalchemy import (JSON, Boolean, DateTime, Float, Integer, String, create_engine, inspect,
                         select, text)
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from src.preprocess import ROOT
@@ -70,13 +72,7 @@ def _utcnow() -> datetime:
 _ready = False
 
 
-def init_db(eng=None):
-    """Create missing tables and add `visitor_id` to an older predictions table."""
-    global _ready
-    if eng is None:
-        if _ready:
-            return
-        eng = engine
+def _create_and_migrate(eng):
     Base.metadata.create_all(eng)
     cols = {c["name"] for c in inspect(eng).get_columns("predictions")}
     if "visitor_id" not in cols:
@@ -84,6 +80,27 @@ def init_db(eng=None):
             conn.execute(text("ALTER TABLE predictions ADD COLUMN visitor_id VARCHAR(32)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_predictions_visitor_id "
                               "ON predictions (visitor_id)"))
+
+
+def init_db(eng=None):
+    """Create missing tables and add `visitor_id` to an older predictions table.
+
+    Several server workers (gunicorn) can start at the same moment on a fresh
+    database; if one creates a table while another is checking for it, the
+    second gets "already exists". Retrying a couple of times resolves that."""
+    global _ready
+    if eng is None:
+        if _ready:
+            return
+        eng = engine
+    for attempt in range(3):
+        try:
+            _create_and_migrate(eng)
+            break
+        except DBAPIError:
+            if attempt == 2:
+                raise
+            time.sleep(0.2 * (attempt + 1))
     if eng is engine:
         _ready = True
 

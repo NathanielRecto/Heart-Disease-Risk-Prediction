@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     accuracy_score,
+    brier_score_loss,
     confusion_matrix,
     f1_score,
     fbeta_score,
@@ -16,6 +17,10 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+
+
+# One colour per model, shared by every chart (train.py and report.py).
+MODEL_COLORS = {"Logistic Regression": "#2563eb", "Random Forest": "#059669", "XGBoost": "#8a0f1d"}
 
 
 def metrics_at(y_true, proba, threshold=0.5):
@@ -29,6 +34,7 @@ def metrics_at(y_true, proba, threshold=0.5):
         "f1": f1_score(y_true, pred),
         "f2": fbeta_score(y_true, pred, beta=2),
         "roc_auc": roc_auc_score(y_true, proba),
+        "brier": brier_score_loss(y_true, proba),
         "TN": tn, "FP": fp, "FN": fn, "TP": tp,
     }
 
@@ -38,7 +44,7 @@ def best_threshold(y_true, proba, beta=2.0):
     precision). Meant to be called on out-of-fold training predictions."""
     grid = np.linspace(0.05, 0.95, 91)
     scores = [fbeta_score(y_true, (proba >= t).astype(int), beta=beta) for t in grid]
-    return float(grid[int(np.argmax(scores))])
+    return round(float(grid[int(np.argmax(scores))]), 2)  # avoid float noise like 0.3999999
 
 
 def plot_confusions(results, y_test, path):
@@ -57,10 +63,11 @@ def plot_confusions(results, y_test, path):
 def plot_pr_curves(results, y_test, path):
     fig, ax = plt.subplots(figsize=(6, 5))
     for name, (proba, thr) in results.items():
+        color = MODEL_COLORS.get(name)
         p, r, _ = precision_recall_curve(y_test, proba)
-        ax.plot(r, p, label=name)
+        ax.plot(r, p, label=name, color=color)
         pred = (proba >= thr).astype(int)
-        ax.scatter([recall_score(y_test, pred)], [precision_score(y_test, pred)], marker="o")
+        ax.scatter([recall_score(y_test, pred)], [precision_score(y_test, pred)], marker="o", color=color, zorder=3)
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
     ax.set_title("Precision-Recall (dots = chosen threshold)")

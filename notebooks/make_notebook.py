@@ -4,7 +4,8 @@ import nbformat as nbf
 nb = nbf.v4.new_notebook()
 md, code = nbf.v4.new_markdown_cell, nbf.v4.new_code_cell
 nb.cells = [
-    md("# 01 - Exploratory data analysis\nUCI Heart Disease (Cleveland, Hungary, Switzerland, VA Long Beach), 920 patients."),
+    md("# 01 - Exploratory data analysis\nUCI Heart Disease (Cleveland, Hungary, Switzerland, VA Long Beach): "
+       "920 rows, 918 patients after removing 2 exact duplicates."),
     code("""import sys; sys.path.insert(0, '..')
 import pandas as pd, matplotlib.pyplot as plt, seaborn as sns
 from src.preprocess import load_data
@@ -20,8 +21,12 @@ miss[miss > 0].plot.barh(title='Fraction missing');
 miss[miss > 0].round(3)"""),
     md("## 3. Missingness depends on the hospital\n`ca` is almost only recorded at Cleveland; Switzerland has no cholesterol at all. "
        "Missingness therefore leaks *which hospital* a patient came from, and hospitals have very different disease rates, "
-       "so the model should not be allowed to learn from it blindly. This is why the hospital column is never a feature "
-       "and why `train.py` compares dropping vs keeping `ca`/`thal`/`slope`."),
+       "so the model must not learn from it. This is why the hospital column is never a feature, why `train.py` "
+       "compares dropping vs keeping `ca`/`thal`/`slope`, and why blanks are filled with typical values without a "
+       "\"was missing\" indicator."),
+    code("""for c in ['chol', 'fbs', 'trestbps', 'thalch']:
+    m = df[c].isna()
+    print(f"{c:9s} missing n={m.sum():3d}  disease rate if missing {df.loc[m,'target'].mean():.2f}  vs present {df.loc[~m,'target'].mean():.2f}")"""),
     code("""by_site = df.groupby('dataset').agg(n=('target','size'), disease_rate=('target','mean'),
         ca_missing=('ca', lambda s: s.isna().mean()), thal_missing=('thal', lambda s: s.isna().mean()),
         chol_missing=('chol', lambda s: s.isna().mean())).round(2)

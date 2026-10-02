@@ -6,6 +6,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from src.calibration import risk
 from src.preprocess import ROOT, load_data
 
 LABELS = {
@@ -39,16 +40,19 @@ def reference_data():
 
 def _num(payload, key, lo, hi, errors, required=False):
     raw = payload.get(key)
-    if raw in (None, ""):
+    if raw is None or raw == "":
         if required:
             errors[key] = "Required"
         return np.nan
+    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+        errors[key] = "Enter a number"  # e.g. true/false, lists, objects
+        return np.nan
     try:
         v = float(raw)
-    except (TypeError, ValueError):
+    except ValueError:
         errors[key] = "Enter a number"
         return np.nan
-    if not lo <= v <= hi:
+    if not lo <= v <= hi:  # also rejects NaN and infinity
         errors[key] = f"Must be between {lo} and {hi}"
         return np.nan
     return v
@@ -56,11 +60,11 @@ def _num(payload, key, lo, hi, errors, required=False):
 
 def _choice(payload, key, allowed, errors, required=False):
     raw = payload.get(key)
-    if raw in (None, ""):
+    if raw is None or raw == "":
         if required:
             errors[key] = "Required"
         return np.nan
-    if raw not in allowed:
+    if not isinstance(raw, str) or raw not in allowed:
         errors[key] = "Invalid choice"
         return np.nan
     return raw
@@ -94,7 +98,8 @@ def _frame(art, rows):
 
 
 def predict_proba(art, row):
-    return float(art["model"].predict_proba(_frame(art, [row]))[0, 1])
+    """Calibrated probability of heart disease for one patient."""
+    return float(risk(art, _frame(art, [row]))[0])
 
 
 def _show(feature, value):
@@ -119,7 +124,7 @@ def explain(art, row, prob, top_up=3, top_down=2, min_effect=0.02):
         block = pd.DataFrame([row] * len(ref)).reindex(columns=art_cols)
         block[f] = ref[f].to_numpy()
         frames.append(block)
-    probs = art["model"].predict_proba(pd.concat(frames, ignore_index=True))[:, 1]
+    probs = risk(art, pd.concat(frames, ignore_index=True))
     probs = probs.reshape(len(art_cols), len(ref)).mean(axis=1)
 
     effects = []

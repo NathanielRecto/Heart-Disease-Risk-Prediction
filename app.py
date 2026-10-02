@@ -2,6 +2,7 @@
 import os
 import re
 import secrets
+from functools import lru_cache
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -11,6 +12,7 @@ from src.predict import best_artifact, explain, guidance, load_artifacts, parse_
 from src.preprocess import ROOT, load_data
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024  # the form sends well under 1 KB
 init_db()  # create tables / upgrade an older database before serving requests
 # Behind a hosting proxy (Hugging Face, Cloud Run) the app sees plain HTTP; trust the proxy's
 # X-Forwarded-Proto so it knows the visitor is really on HTTPS.
@@ -37,6 +39,11 @@ def set_visitor_cookie(response, visitor_id):
     return response
 
 
+@lru_cache(maxsize=1)
+def n_patients():
+    return len(load_data())
+
+
 def model_cards():
     """Display info for every saved model (metrics are from the held-out test set)."""
     return [{
@@ -55,7 +62,7 @@ def inject_globals():
 
 @app.get("/")
 def home():
-    return render_template("home.html", n_patients=len(load_data()))
+    return render_template("home.html", n_patients=n_patients())
 
 
 @app.get("/assess")
@@ -65,7 +72,7 @@ def assess():
 
 @app.get("/how-it-works")
 def how_it_works():
-    return render_template("how.html", models=model_cards(), n_patients=len(load_data()))
+    return render_template("how.html", models=model_cards(), n_patients=n_patients())
 
 
 @app.get("/history")
@@ -89,13 +96,16 @@ def report_image(name):
 
 @app.post("/api/predict")
 def api_predict():
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"errors": {"request": "Expected a JSON object"}}), 400
     row, extras, errors = parse_inputs(payload)
     if errors:
         return jsonify({"errors": errors}), 400
 
-    arts = load_artifacts()
-    art = arts.get(payload.get("model")) or best_artifact()
+    name = payload.get("model")
+    art = load_artifacts().get(name) if isinstance(name, str) else None
+    art = art or best_artifact()
     prob = predict_proba(art, row)
     high = prob >= art["threshold"]
 

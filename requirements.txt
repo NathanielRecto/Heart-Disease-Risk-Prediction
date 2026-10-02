@@ -1,10 +1,7 @@
-pandas
-numpy
-scikit-learn
-xgboost
-matplotlib
-seaborn
-joblib
-flask
-sqlalchemy
-jupyter
+# Everything needed to retrain, rebuild the reports, run the notebook and run the app.
+# Tested with Python 3.10. Versions are pinned: the saved models (models/*.joblib) only
+# load reliably with the same scikit-learn and XGBoost versions they were trained with.
+-r requirements-app.txt
+matplotlib==3.10.9
+seaborn==0.13.2
+jupyter==1.1.1

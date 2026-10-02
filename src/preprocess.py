@@ -2,7 +2,7 @@
 
 Everything that learns from data (imputation values, scaling, one-hot
 categories) lives inside a scikit-learn Pipeline, so it is fit on training
-data only. This prevents data leakage and lets the Streamlit app apply the
+data only. This prevents data leakage and lets the web app apply the
 exact same transformations at prediction time.
 """
 from pathlib import Path
@@ -28,6 +28,10 @@ BOOLEAN = ["fbs", "exang"]
 def load_data(path=DATA_PATH):
     """Read the CSV, fix impossible values and build the binary target."""
     df = pd.read_csv(path)
+
+    # Two patients appear twice (identical on every column except id). A copy in the
+    # training set and one in the test set would leak, so keep one of each.
+    df = df.drop_duplicates(subset=[c for c in df.columns if c != "id"]).reset_index(drop=True)
 
     # num: 0 = no disease, 1-4 = disease of increasing severity -> binary.
     df["target"] = (df["num"] > 0).astype(int)
@@ -59,15 +63,20 @@ def feature_columns(sparse="drop"):
 
 
 def build_preprocessor(sparse="drop"):
-    """`sparse="drop"` removes ca/thal/slope; `"keep"` keeps them and lets
-    "was it missing?" become a feature."""
+    """`sparse="drop"` removes ca/thal/slope; `"keep"` keeps them.
+
+    Missing values are filled with typical values (median / most frequent) and
+    "was it missing?" is deliberately NOT a feature. In this data, missingness
+    depends on the hospital (e.g. Switzerland recorded no cholesterol and 93% of
+    its patients are sick), so a missing-indicator teaches the model "blank
+    means sick", and skipping an optional field in the app would raise the risk."""
     num, cat = feature_columns(sparse)
     numeric_pipe = Pipeline([
-        ("impute", SimpleImputer(strategy="median", add_indicator=True)),
+        ("impute", SimpleImputer(strategy="median")),
         ("scale", StandardScaler()),
     ])
     categorical_pipe = Pipeline([
-        ("impute", SimpleImputer(strategy="constant", fill_value="missing")),
+        ("impute", SimpleImputer(strategy="most_frequent")),
         ("onehot", OneHotEncoder(handle_unknown="ignore")),
     ])
     return ColumnTransformer([
